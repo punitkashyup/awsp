@@ -19,12 +19,14 @@ class TestShellType:
         assert ShellType.BASH.value == "bash"
         assert ShellType.ZSH.value == "zsh"
         assert ShellType.FISH.value == "fish"
+        assert ShellType.POWERSHELL.value == "powershell"
 
     def test_shell_type_from_string(self):
         """Test creating ShellType from string."""
         assert ShellType("bash") == ShellType.BASH
         assert ShellType("zsh") == ShellType.ZSH
         assert ShellType("fish") == ShellType.FISH
+        assert ShellType("powershell") == ShellType.POWERSHELL
 
 
 class TestExportCommands:
@@ -91,6 +93,23 @@ class TestGetShellHook:
         assert "#" in hook  # Has comments
         assert "config.fish" in hook.lower()
 
+    def test_powershell_hook(self):
+        """Test PowerShell hook generation."""
+        hook = get_shell_hook(ShellType.POWERSHELL)
+
+        # PowerShell has different syntax
+        assert "function awsp" in hook
+        assert "$env:AWS_PROFILE" in hook
+        assert "--shell-mode" in hook
+        assert "Invoke-Expression" in hook or "$PROFILE" in hook
+
+    def test_powershell_hook_has_comments(self):
+        """Test PowerShell hook has helpful comments."""
+        hook = get_shell_hook(ShellType.POWERSHELL)
+
+        assert "#" in hook  # Has comments
+        assert "$PROFILE" in hook
+
 
 class TestDetectShell:
     """Tests for shell detection."""
@@ -125,3 +144,18 @@ class TestDetectShell:
         monkeypatch.setenv("SHELL", "/usr/local/bin/zsh-5.8")
         # Should still detect zsh
         assert detect_shell() == ShellType.ZSH
+
+    def test_detect_powershell_on_windows(self, monkeypatch: pytest.MonkeyPatch):
+        """Test detecting PowerShell on Windows."""
+        import sys
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setenv("PSModulePath", "C:\\Program Files\\WindowsPowerShell\\Modules")
+        assert detect_shell() == ShellType.POWERSHELL
+
+    def test_detect_powershell_windows_default(self, monkeypatch: pytest.MonkeyPatch):
+        """Test Windows defaults to PowerShell."""
+        import sys
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.delenv("PSModulePath", raising=False)
+        monkeypatch.delenv("SHELL", raising=False)
+        assert detect_shell() == ShellType.POWERSHELL

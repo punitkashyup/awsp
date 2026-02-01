@@ -512,3 +512,142 @@ class TestCLIInfoEdgeCases:
         result = runner.invoke(app, ["info"])
         assert result.exit_code == 1
         assert "No profile specified" in result.stdout
+
+
+class TestCLIActivate:
+    """Tests for activate command."""
+
+    def test_activate_help(self):
+        """Test activate --help."""
+        result = runner.invoke(app, ["activate", "--help"])
+        assert result.exit_code == 0
+        assert "Activate" in result.stdout
+
+    def test_activate_shell_mode(self, populated_aws_env: Path):
+        """Test activate with shell mode."""
+        result = runner.invoke(app, ["activate", "production", "--shell-mode"])
+        assert result.exit_code == 0
+        assert 'export AWS_PROFILE="production"' in result.stdout
+        assert "Activated profile" in result.stdout
+
+    def test_activate_shell_mode_nonexistent(self, populated_aws_env: Path):
+        """Test activate nonexistent profile in shell mode."""
+        result = runner.invoke(app, ["activate", "nonexistent", "--shell-mode"])
+        assert result.exit_code == 1
+        assert "not found" in result.stdout
+
+    def test_activate_shell_mode_no_profiles(self, mock_aws_env: Path):
+        """Test activate shell mode with no profiles."""
+        result = runner.invoke(app, ["activate", "--shell-mode"])
+        assert result.exit_code == 1
+        assert "No AWS profiles" in result.stdout
+
+    def test_activate_without_shell_integration(self, populated_aws_env: Path):
+        """Test activate without shell integration shows instructions."""
+        result = runner.invoke(app, ["activate", "production"])
+        assert result.exit_code == 0
+        assert "Shell integration required" in result.stdout or "export AWS_PROFILE" in result.stdout
+
+    def test_activate_interactive_shell_mode(self, populated_aws_env: Path):
+        """Test activate interactive mode with shell mode."""
+        with patch("awsp.cli.select_profile", return_value="staging"):
+            result = runner.invoke(app, ["activate", "--shell-mode"])
+            assert result.exit_code == 0
+            assert 'export AWS_PROFILE="staging"' in result.stdout
+
+
+class TestCLIDeactivate:
+    """Tests for deactivate command."""
+
+    def test_deactivate_help(self):
+        """Test deactivate --help."""
+        result = runner.invoke(app, ["deactivate", "--help"])
+        assert result.exit_code == 0
+        assert "Deactivate" in result.stdout
+
+    def test_deactivate_shell_mode_with_profile(
+        self,
+        populated_aws_env: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Test deactivate with active profile in shell mode."""
+        monkeypatch.setenv("AWS_PROFILE", "production")
+        result = runner.invoke(app, ["deactivate", "--shell-mode"])
+        assert result.exit_code == 0
+        assert "unset AWS_PROFILE" in result.stdout
+        assert "Deactivated" in result.stdout
+
+    def test_deactivate_shell_mode_no_profile(self, mock_aws_env: Path):
+        """Test deactivate with no active profile in shell mode."""
+        result = runner.invoke(app, ["deactivate", "--shell-mode"])
+        assert result.exit_code == 0
+        assert "No profile currently active" in result.stdout
+
+    def test_deactivate_without_shell_integration(
+        self,
+        populated_aws_env: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Test deactivate without shell integration shows instructions."""
+        monkeypatch.setenv("AWS_PROFILE", "production")
+        result = runner.invoke(app, ["deactivate"])
+        assert result.exit_code == 0
+        assert "Shell integration required" in result.stdout or "unset AWS_PROFILE" in result.stdout
+
+
+class TestCLISetup:
+    """Tests for setup command."""
+
+    def test_setup_help(self):
+        """Test setup --help."""
+        result = runner.invoke(app, ["setup", "--help"])
+        assert result.exit_code == 0
+        assert "Set up shell integration" in result.stdout
+
+    def test_setup_already_configured(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Test setup when already configured."""
+        # Create a mock home directory with .zshrc containing awsp init
+        home = tmp_path / "home"
+        home.mkdir()
+        zshrc = home / ".zshrc"
+        zshrc.write_text('eval "$(awsp init)"\n')
+
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("SHELL", "/bin/zsh")
+
+        # Patch Path.home() to return our mock home
+        with patch("pathlib.Path.home", return_value=home):
+            result = runner.invoke(app, ["setup"])
+            assert result.exit_code == 0
+            assert "already configured" in result.stdout
+
+    def test_setup_adds_integration(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Test setup adds shell integration."""
+        # Create a mock home directory with empty .zshrc
+        home = tmp_path / "home"
+        home.mkdir()
+        zshrc = home / ".zshrc"
+        zshrc.write_text("# existing config\n")
+
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("SHELL", "/bin/zsh")
+
+        with patch("pathlib.Path.home", return_value=home):
+            result = runner.invoke(app, ["setup"])
+            assert result.exit_code == 0
+            assert "added" in result.stdout.lower()
+
+            # Verify the file was updated
+            content = zshrc.read_text()
+            assert "awsp init" in content
+
+
+class TestCLIInitPowerShell:
+    """Tests for init command with PowerShell."""
+
+    def test_init_powershell(self):
+        """Test init with PowerShell shell type."""
+        result = runner.invoke(app, ["init", "--shell", "powershell"])
+        assert result.exit_code == 0
+        assert "function awsp" in result.stdout
+        assert "$env:AWS_PROFILE" in result.stdout
