@@ -13,39 +13,79 @@ A command-line utility for easily managing and switching between AWS CLI profile
 
 ## Installation
 
-**Recommended** (using pipx):
+### macOS / Linux
+
 ```bash
+# Install pipx (if not installed)
+brew install pipx    # macOS
+# or: sudo apt install pipx    # Ubuntu/Debian
+
+# Install awsp
 pipx install awsp
+
+# Set up shell integration
+awsp setup
+source ~/.zshrc  # or ~/.bashrc for Bash
 ```
 
-Or with pip:
+### Windows
+
+```powershell
+# Install pipx (if not installed)
+pip install --user pipx
+pipx ensurepath
+
+# Restart PowerShell, then install awsp
+pipx install awsp
+
+# Set up shell integration
+awsp setup
+. $PROFILE
+```
+
+### Alternative: pip install
+
 ```bash
 pip install awsp
 ```
 
-> **Note:** [pipx](https://pipx.pypa.io/) is recommended for CLI tools as it installs them in isolated environments.
+> **Note:** [pipx](https://pipx.pypa.io/) is recommended as it installs CLI tools in isolated environments.
 
 ## Quick Start
 
-```bash
-# One-time setup (auto-configures shell integration)
-awsp setup
-source ~/.zshrc
+### macOS / Linux
 
+```bash
 # Add a new profile
 awsp add
 
-# Activate a profile (sets AWS_PROFILE)
+# Activate a profile
 awsp activate my-profile
 
-# Deactivate current profile (unsets AWS_PROFILE)
+# Deactivate current profile
 awsp deactivate
 
 # List all profiles
 awsp list
 
-# Show current profile
-awsp current
+# Validate credentials
+awsp validate
+```
+
+### Windows (PowerShell)
+
+```powershell
+# Add a new profile
+awsp add
+
+# Activate a profile
+awsp activate my-profile
+
+# Deactivate current profile
+awsp deactivate
+
+# List all profiles
+awsp list
 
 # Validate credentials
 awsp validate
