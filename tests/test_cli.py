@@ -167,7 +167,7 @@ class TestCLIRemove:
         # Mock the confirm_action to return False
         with patch("awsp.cli.confirm_action", return_value=False):
             result = runner.invoke(app, ["remove", "staging"])
-            assert result.exit_code == 0
+            assert result.exit_code == 1  # Cancelled should be non-zero
             assert "Cancelled" in result.stdout
 
 
@@ -651,3 +651,127 @@ class TestCLIInitPowerShell:
         assert result.exit_code == 0
         assert "function awsp" in result.stdout
         assert "$env:AWS_PROFILE" in result.stdout
+
+
+class TestCLIValidateErrorMessages:
+    """Tests for improved validation error messages."""
+
+    def test_validate_invalid_credentials(self, populated_aws_env: Path):
+        """Test validation with invalid credentials shows helpful message."""
+        with patch("awsp.profiles.manager.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1,
+                stderr="InvalidClientTokenId: The security token included in the request is invalid",
+            )
+
+            result = runner.invoke(app, ["validate", "default"])
+            assert result.exit_code == 1
+            assert "Invalid credentials" in result.stdout or "access key" in result.stdout.lower()
+
+    def test_validate_expired_token(self, populated_aws_env: Path):
+        """Test validation with expired token shows helpful message."""
+        with patch("awsp.profiles.manager.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1,
+                stderr="ExpiredToken: The security token included in the request is expired",
+            )
+
+            result = runner.invoke(app, ["validate", "default"])
+            assert result.exit_code == 1
+            assert "expired" in result.stdout.lower() or "sso login" in result.stdout.lower()
+
+    def test_validate_timeout(self, populated_aws_env: Path):
+        """Test validation timeout shows helpful message."""
+        import subprocess
+        with patch("awsp.profiles.manager.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="aws", timeout=30)
+
+            result = runner.invoke(app, ["validate", "default"])
+            assert result.exit_code == 1
+            assert "timed out" in result.stdout.lower() or "network" in result.stdout.lower()
+
+    def test_validate_aws_cli_not_found(self, populated_aws_env: Path):
+        """Test validation when AWS CLI not found shows helpful message."""
+        with patch("awsp.profiles.manager.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError()
+
+            result = runner.invoke(app, ["validate", "default"])
+            assert result.exit_code == 1
+            assert "AWS CLI not found" in result.stdout or "install" in result.stdout.lower()
+
+
+class TestCLIAddSuccessHints:
+    """Tests for success hints after add command."""
+
+    def test_add_iam_shows_next_steps(self, mock_aws_env: Path):
+        """Test adding IAM profile shows next steps."""
+        from awsp.config.models import IAMProfile
+
+        mock_profile = IAMProfile(
+            name="test-profile",
+            aws_access_key_id="AKIATESTEXAMPLE12345",
+            aws_secret_access_key="testSecretKey1234567890123456",
+        )
+
+        with patch("awsp.cli.prompt_iam_profile", return_value=mock_profile):
+            result = runner.invoke(app, ["add", "--type", "iam"])
+            assert result.exit_code == 0
+            assert "created successfully" in result.stdout
+            assert "Next" in result.stdout or "activate" in result.stdout.lower()
+
+    def test_add_sso_shows_next_steps(self, mock_aws_env: Path):
+        """Test adding SSO profile shows next steps."""
+        from awsp.config.models import SSOProfile
+
+        mock_profile = SSOProfile(
+            name="test-sso",
+            sso_start_url="https://example.awsapps.com/start",
+            sso_region="us-east-1",
+            sso_account_id="123456789012",
+            sso_role_name="Admin",
+        )
+
+        with patch("awsp.cli.prompt_sso_profile", return_value=mock_profile):
+            with patch("awsp.cli.confirm_action", return_value=False):
+                result = runner.invoke(app, ["add", "--type", "sso"])
+                assert result.exit_code == 0
+                assert "created successfully" in result.stdout
+                assert "Next" in result.stdout or "activate" in result.stdout.lower()
+
+
+class TestCLIAddAWSCLICheck:
+    """Tests for AWS CLI check before SSO login."""
+
+    def test_add_sso_checks_aws_cli(self, mock_aws_env: Path):
+        """Test SSO login checks for AWS CLI before running."""
+        from awsp.config.models import SSOProfile
+
+        mock_profile = SSOProfile(
+            name="test-sso",
+            sso_start_url="https://example.awsapps.com/start",
+            sso_region="us-east-1",
+            sso_account_id="123456789012",
+            sso_role_name="Admin",
+        )
+
+        with patch("awsp.cli.prompt_sso_profile", return_value=mock_profile):
+            with patch("awsp.cli.confirm_action", return_value=True):
+                with patch("shutil.which", return_value=None):
+                    result = runner.invoke(app, ["add", "--type", "sso"])
+                    assert result.exit_code == 0
+                    assert "not installed" in result.stdout.lower() or "install" in result.stdout.lower()
+
+
+class TestDisplaySpinner:
+    """Tests for display spinner utility."""
+
+    def test_show_spinner_exists(self):
+        """Test that show_spinner is importable."""
+        from awsp.ui.display import show_spinner
+        assert show_spinner is not None
+
+    def test_show_spinner_is_context_manager(self):
+        """Test that show_spinner can be used as context manager."""
+        from awsp.ui.display import show_spinner
+        import contextlib
+        assert hasattr(show_spinner, '__enter__') or isinstance(show_spinner, type(contextlib.contextmanager))

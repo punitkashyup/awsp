@@ -16,6 +16,7 @@ from awsp.ui.display import (
     print_error,
     print_warning,
     print_info,
+    show_spinner,
 )
 from awsp.ui.prompts import (
     select_profile,
@@ -199,6 +200,7 @@ def add(
 
         get_manager().add_iam_profile(profile)
         print_success(f"Profile '{profile.name}' created successfully.")
+        print_info(f"Next: Run 'awsp activate {profile.name}' or 'awsp validate {profile.name}'")
 
     else:  # SSO
         profile = prompt_sso_profile()
@@ -214,10 +216,18 @@ def add(
 
         get_manager().add_sso_profile(profile)
         print_success(f"Profile '{profile.name}' created successfully.")
+        print_info(f"Next: Run 'awsp activate {profile.name}' after logging in.")
 
         # Offer to run SSO login
         if confirm_action("Run 'aws sso login' now?"):
+            import shutil
             import subprocess
+
+            if not shutil.which("aws"):
+                print_error("AWS CLI not installed.")
+                print_info("Install with: brew install awscli (macOS) or pip install awscli")
+                return
+
             console.print()
             subprocess.run(["aws", "sso", "login", "--profile", profile.name])
 
@@ -235,7 +245,7 @@ def remove(
     if not force:
         if not confirm_action(f"Remove profile '{profile}'?"):
             print_warning("Cancelled.")
-            raise typer.Exit(0)
+            raise typer.Exit(1)
 
     if get_manager().remove_profile(profile):
         print_success(f"Profile '{profile}' removed.")
@@ -283,9 +293,8 @@ def validate(
         print_error(f"Profile '{profile}' not found.")
         raise typer.Exit(1)
 
-    print_info(f"Validating profile '{profile}'...")
-
-    success, message = get_manager().validate_profile(profile)
+    with show_spinner(f"Validating profile '{profile}'..."):
+        success, message = get_manager().validate_profile(profile)
 
     if success:
         print_success("Credentials are valid!")
@@ -535,6 +544,8 @@ def setup():
     console.print(f"  [cyan]{reload_cmd}[/cyan]")
     console.print()
     print_info("Or restart your terminal.")
+    console.print()
+    print_info("Then try: awsp activate <profile-name>")
 
 
 if __name__ == "__main__":

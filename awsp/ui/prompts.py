@@ -77,7 +77,8 @@ def prompt_iam_profile(existing_name: Optional[str] = None) -> Optional[IAMProfi
 
     # Access key
     access_key = questionary.text(
-        "AWS Access Key ID:",
+        "AWS Access Key ID (starts with AKIA):",
+        instruction="Find in: IAM → Users → Security credentials → Access keys",
         validate=lambda x: (len(x.strip()) >= 16 and x.strip().startswith(("AKIA", "ASIA")))
                           or "Invalid access key format (should start with AKIA or ASIA)",
         style=custom_style,
@@ -154,6 +155,7 @@ def prompt_sso_profile(existing_name: Optional[str] = None) -> Optional[SSOProfi
     # Account ID
     sso_account_id = questionary.text(
         "AWS Account ID (12 digits):",
+        instruction="Find in: AWS Console top-right → Account ID",
         validate=lambda x: (x.strip().isdigit() and len(x.strip()) == 12)
                           or "Account ID must be 12 digits",
         style=custom_style,
@@ -165,6 +167,7 @@ def prompt_sso_profile(existing_name: Optional[str] = None) -> Optional[SSOProfi
     # Role name
     sso_role_name = questionary.text(
         "SSO Role Name (e.g., AdministratorAccess):",
+        instruction="Find in: AWS SSO portal → AWS Account → Role name",
         validate=lambda x: len(x.strip()) > 0 or "Role name is required",
         style=custom_style,
     ).ask()

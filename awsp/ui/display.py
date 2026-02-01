@@ -1,6 +1,7 @@
 """Display utilities for rich output."""
 
-from typing import Dict, Optional
+from contextlib import contextmanager
+from typing import Dict, Generator, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -11,6 +12,18 @@ from awsp.config.models import ProfileInfo, ProfileType
 
 
 console = Console()
+
+
+@contextmanager
+def show_spinner(message: str) -> Generator[None, None, None]:
+    """Show a spinner while an operation is in progress.
+
+    Usage:
+        with show_spinner("Validating credentials..."):
+            do_slow_operation()
+    """
+    with console.status(f"[cyan]{message}[/cyan]", spinner="dots"):
+        yield
 
 
 def display_profiles_table(profiles: Dict[str, ProfileInfo]) -> None:

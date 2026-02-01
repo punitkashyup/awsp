@@ -329,7 +329,7 @@ class TestProfileManagerValidate:
             assert "default" in call_args[0][0]
 
     def test_validate_failure(self, populated_aws_env: Path):
-        """Test failed validation."""
+        """Test failed validation returns user-friendly error message."""
         manager = ProfileManager()
 
         with patch("subprocess.run") as mock_run:
@@ -341,7 +341,8 @@ class TestProfileManagerValidate:
             success, message = manager.validate_profile("default")
 
             assert success is False
-            assert "InvalidClientTokenId" in message
+            # Now returns user-friendly error instead of raw AWS error
+            assert "Invalid credentials" in message or "access key" in message.lower()
 
     def test_validate_timeout(self, populated_aws_env: Path):
         """Test validation timeout."""

@@ -170,14 +170,32 @@ class ProfileManager:
             if result.returncode == 0:
                 return True, result.stdout.strip()
             else:
-                return False, result.stderr.strip()
+                error = result.stderr.strip()
+                return False, self._format_validation_error(error, name)
 
         except subprocess.TimeoutExpired:
-            return False, "Request timed out"
+            return False, "Request timed out. Check your network connection or AWS service status."
         except FileNotFoundError:
-            return False, "AWS CLI not found. Please install aws-cli."
+            return False, "AWS CLI not found. Install with: brew install awscli (macOS) or pip install awscli"
         except Exception as e:
             return False, str(e)
+
+    def _format_validation_error(self, error: str, profile_name: str) -> str:
+        """Format AWS error messages with actionable suggestions."""
+        if "InvalidClientTokenId" in error:
+            return "Invalid credentials. Verify your access key ID is correct."
+        elif "SignatureDoesNotMatch" in error:
+            return "Invalid credentials. Verify your secret access key is correct."
+        elif "ExpiredToken" in error:
+            return f"Credentials expired. For SSO profiles, run: aws sso login --profile {profile_name}"
+        elif "AccessDenied" in error:
+            return "Access denied. Check that your credentials have the required permissions."
+        elif "UnauthorizedAccess" in error:
+            return f"Session expired. For SSO profiles, run: aws sso login --profile {profile_name}"
+        elif "NoCredentialProviders" in error:
+            return "No credentials found. Ensure the profile has valid credentials configured."
+        else:
+            return error
 
     def _update_config_file(self, profile_name: str, region: Optional[str], output: Optional[str]) -> None:
         """Update config file with region/output settings."""
