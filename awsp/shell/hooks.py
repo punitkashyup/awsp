@@ -9,6 +9,7 @@ class ShellType(str, Enum):
     BASH = "bash"
     ZSH = "zsh"
     FISH = "fish"
+    POWERSHELL = "powershell"
 
 
 def get_export_command(profile_name: str) -> str:
@@ -34,6 +35,8 @@ def get_shell_hook(shell: ShellType) -> str:
     """
     if shell == ShellType.FISH:
         return _get_fish_hook()
+    elif shell == ShellType.POWERSHELL:
+        return _get_powershell_hook()
     else:
         return _get_bash_zsh_hook()
 
@@ -125,10 +128,80 @@ end
 '''
 
 
+def _get_powershell_hook() -> str:
+    """Generate PowerShell hook."""
+    return '''# awsp shell integration for PowerShell
+# Add this to your PowerShell profile ($PROFILE):
+#   Invoke-Expression (awsp init --shell powershell)
+
+function awsp {
+    param([Parameter(ValueFromRemainingArguments=$true)]$Args)
+
+    $cmd = if ($Args.Count -gt 0) { $Args[0] } else { "" }
+
+    # Commands that need shell integration (modify environment)
+    if ($cmd -eq "" -or $cmd -eq "switch" -or $cmd -eq "activate" -or $cmd -eq "deactivate") {
+        # Find the real awsp executable
+        $awspPath = (Get-Command awsp -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+
+        if (-not $awspPath) {
+            Write-Error "awsp executable not found"
+            return
+        }
+
+        # Run awsp with --shell-mode flag
+        $output = & $awspPath @Args --shell-mode 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            # Parse and execute the output
+            foreach ($line in $output) {
+                if ($line -match '^export AWS_PROFILE="(.+)"$') {
+                    $env:AWS_PROFILE = $Matches[1]
+                }
+                elseif ($line -match '^unset AWS_PROFILE') {
+                    Remove-Item Env:AWS_PROFILE -ErrorAction SilentlyContinue
+                }
+                elseif ($line -match '^echo "(.+)"$') {
+                    Write-Host $Matches[1]
+                }
+            }
+        }
+        else {
+            # Error occurred - just print the output
+            $output | ForEach-Object { Write-Host $_ }
+        }
+    }
+    else {
+        # Other commands - pass through directly
+        $awspPath = (Get-Command awsp -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+        if ($awspPath) {
+            & $awspPath @Args
+        }
+    }
+}
+
+# Show current profile in prompt (optional)
+# Add to your prompt function:
+# function prompt {
+#     $awsProfile = if ($env:AWS_PROFILE) { "(aws:$env:AWS_PROFILE) " } else { "" }
+#     "$awsProfile$(Get-Location)> "
+# }
+'''
+
+
 def detect_shell() -> Optional[ShellType]:
     """Attempt to detect the current shell type."""
     import os
+    import sys
 
+    # Check for Windows PowerShell
+    if sys.platform == "win32":
+        # On Windows, check if running in PowerShell
+        if os.environ.get("PSModulePath"):
+            return ShellType.POWERSHELL
+        return ShellType.POWERSHELL  # Default to PowerShell on Windows
+
+    # Unix-like systems
     shell = os.environ.get("SHELL", "")
 
     if "zsh" in shell:

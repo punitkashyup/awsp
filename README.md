@@ -70,6 +70,13 @@ eval "$(awsp init)"
 awsp init --shell fish | source
 ```
 
+**PowerShell** (`$PROFILE`):
+```powershell
+Invoke-Expression (awsp init --shell powershell)
+```
+
+Or simply run `awsp setup` to auto-configure your shell.
+
 ## Commands
 
 | Command | Description |
@@ -91,6 +98,14 @@ awsp init --shell fish | source
 
 - Python 3.10+
 - AWS CLI (for credential validation and SSO login)
+
+## Platform Support
+
+| Platform | Shell | Status |
+|----------|-------|--------|
+| macOS | Zsh, Bash, Fish | ✅ Full support |
+| Linux | Bash, Zsh, Fish | ✅ Full support |
+| Windows | PowerShell | ✅ Full support |
 
 ## License
 

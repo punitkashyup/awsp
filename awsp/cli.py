@@ -471,6 +471,7 @@ def setup():
         awsp setup
     """
     import os
+    import sys
     from pathlib import Path
 
     shell_type = detect_shell()
@@ -486,12 +487,25 @@ def setup():
     if shell_type == ShellType.ZSH:
         config_file = home / ".zshrc"
         integration_line = 'eval "$(awsp init)"'
+        reload_cmd = f"source {config_file}"
     elif shell_type == ShellType.BASH:
         config_file = home / ".bashrc"
         integration_line = 'eval "$(awsp init)"'
+        reload_cmd = f"source {config_file}"
     elif shell_type == ShellType.FISH:
         config_file = home / ".config" / "fish" / "config.fish"
         integration_line = "awsp init --shell fish | source"
+        reload_cmd = f"source {config_file}"
+    elif shell_type == ShellType.POWERSHELL:
+        # PowerShell profile location
+        if sys.platform == "win32":
+            documents = home / "Documents"
+            config_file = documents / "WindowsPowerShell" / "Microsoft.PowerShell_profile.ps1"
+        else:
+            # PowerShell Core on macOS/Linux
+            config_file = home / ".config" / "powershell" / "Microsoft.PowerShell_profile.ps1"
+        integration_line = "Invoke-Expression (awsp init --shell powershell)"
+        reload_cmd = ". $PROFILE"
     else:
         print_error(f"Unsupported shell: {shell_type}")
         raise typer.Exit(1)
@@ -504,7 +518,7 @@ def setup():
             print_info(f"Config file: {config_file}")
             console.print()
             print_info("If it's not working, try reloading your shell:")
-            console.print(f"  [cyan]source {config_file}[/cyan]")
+            console.print(f"  [cyan]{reload_cmd}[/cyan]")
             return
 
     # Add integration
@@ -518,7 +532,7 @@ def setup():
     print_success(f"Shell integration added to {config_file}")
     console.print()
     print_info("To activate, run:")
-    console.print(f"  [cyan]source {config_file}[/cyan]")
+    console.print(f"  [cyan]{reload_cmd}[/cyan]")
     console.print()
     print_info("Or restart your terminal.")
 
