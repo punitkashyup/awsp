@@ -34,7 +34,11 @@ app = typer.Typer(
 )
 
 console = Console()
-manager = ProfileManager()
+
+
+def get_manager() -> ProfileManager:
+    """Get a ProfileManager instance (created fresh for each command)."""
+    return ProfileManager()
 
 
 @app.callback(invoke_without_command=True)
@@ -58,12 +62,12 @@ def main(
     # Default behavior: show current profile and interactive switch
     if shell_mode:
         # Shell mode: just do the switch and output export command
-        profiles = manager.get_profile_names()
+        profiles = get_manager().get_profile_names()
         if not profiles:
             print_error("No AWS profiles found.")
             raise typer.Exit(1)
 
-        current = manager.get_current_profile()
+        current = get_manager().get_current_profile()
         selected = select_profile(profiles, current)
 
         if selected:
@@ -73,11 +77,11 @@ def main(
             raise typer.Exit(1)
     else:
         # Interactive mode: show current, then select
-        current = manager.get_current_profile()
+        current = get_manager().get_current_profile()
         display_current_profile(current)
         console.print()
 
-        profiles = manager.get_profile_names()
+        profiles = get_manager().get_profile_names()
         if not profiles:
             print_warning("No profiles found. Add one with: awsp add")
             raise typer.Exit(0)
@@ -95,10 +99,10 @@ def main(
                 console.print('  [dim]eval "$(awsp init)"[/dim]')
 
 
-@app.command()
-def list():
+@app.command(name="list")
+def list_cmd():
     """List all AWS profiles."""
-    profiles = manager.list_profiles()
+    profiles = get_manager().list_profiles()
     display_profiles_table(profiles)
 
 
@@ -113,7 +117,7 @@ def switch(
     ),
 ):
     """Switch to a different AWS profile."""
-    profiles_dict = manager.list_profiles()
+    profiles_dict = get_manager().list_profiles()
     profile_names = list(profiles_dict.keys())
 
     if not profile_names:
@@ -123,7 +127,7 @@ def switch(
         print_error("No AWS profiles found.")
         raise typer.Exit(1)
 
-    current = manager.get_current_profile()
+    current = get_manager().get_current_profile()
 
     # If no profile specified, show interactive picker
     if profile is None:
@@ -188,12 +192,12 @@ def add(
             raise typer.Exit(1)
 
         # Check if profile already exists
-        if manager.profile_exists(profile.name):
+        if get_manager().profile_exists(profile.name):
             if not confirm_action(f"Profile '{profile.name}' already exists. Overwrite?"):
                 print_warning("Cancelled.")
                 raise typer.Exit(1)
 
-        manager.add_iam_profile(profile)
+        get_manager().add_iam_profile(profile)
         print_success(f"Profile '{profile.name}' created successfully.")
 
     else:  # SSO
@@ -203,12 +207,12 @@ def add(
             raise typer.Exit(1)
 
         # Check if profile already exists
-        if manager.profile_exists(profile.name):
+        if get_manager().profile_exists(profile.name):
             if not confirm_action(f"Profile '{profile.name}' already exists. Overwrite?"):
                 print_warning("Cancelled.")
                 raise typer.Exit(1)
 
-        manager.add_sso_profile(profile)
+        get_manager().add_sso_profile(profile)
         print_success(f"Profile '{profile.name}' created successfully.")
 
         # Offer to run SSO login
@@ -224,7 +228,7 @@ def remove(
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
 ):
     """Remove an AWS profile."""
-    if not manager.profile_exists(profile):
+    if not get_manager().profile_exists(profile):
         print_error(f"Profile '{profile}' not found.")
         raise typer.Exit(1)
 
@@ -233,7 +237,7 @@ def remove(
             print_warning("Cancelled.")
             raise typer.Exit(0)
 
-    if manager.remove_profile(profile):
+    if get_manager().remove_profile(profile):
         print_success(f"Profile '{profile}' removed.")
     else:
         print_error(f"Failed to remove profile '{profile}'.")
@@ -245,7 +249,7 @@ def current(
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Only output profile name"),
 ):
     """Show the current active AWS profile."""
-    profile = manager.get_current_profile()
+    profile = get_manager().get_current_profile()
 
     if quiet:
         if profile:
@@ -256,7 +260,7 @@ def current(
 
     # Show additional info if profile exists
     if profile:
-        profiles = manager.list_profiles()
+        profiles = get_manager().list_profiles()
         if profile in profiles:
             console.print()
             display_profile_info(profiles[profile])
@@ -269,19 +273,19 @@ def validate(
     """Validate AWS profile credentials using STS."""
     # Use current profile if not specified
     if profile is None:
-        profile = manager.get_current_profile()
+        profile = get_manager().get_current_profile()
         if profile is None:
             print_error("No profile specified and no current profile set.")
             print_info("Usage: awsp validate <profile>")
             raise typer.Exit(1)
 
-    if not manager.profile_exists(profile):
+    if not get_manager().profile_exists(profile):
         print_error(f"Profile '{profile}' not found.")
         raise typer.Exit(1)
 
     print_info(f"Validating profile '{profile}'...")
 
-    success, message = manager.validate_profile(profile)
+    success, message = get_manager().validate_profile(profile)
 
     if success:
         print_success("Credentials are valid!")
@@ -340,12 +344,12 @@ def info(
 ):
     """Show detailed information about a profile."""
     if profile is None:
-        profile = manager.get_current_profile()
+        profile = get_manager().get_current_profile()
         if profile is None:
             print_error("No profile specified and no current profile set.")
             raise typer.Exit(1)
 
-    profiles = manager.list_profiles()
+    profiles = get_manager().list_profiles()
 
     if profile not in profiles:
         print_error(f"Profile '{profile}' not found.")
