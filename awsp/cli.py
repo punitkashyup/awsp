@@ -358,5 +358,170 @@ def info(
     display_profile_info(profiles[profile])
 
 
+@app.command()
+def activate(
+    profile: Optional[str] = typer.Argument(None, help="Profile name to activate"),
+    shell_mode: bool = typer.Option(
+        False,
+        "--shell-mode",
+        hidden=True,
+        help="Output shell commands for eval",
+    ),
+):
+    """Activate an AWS profile (sets AWS_PROFILE in current shell).
+
+    Example:
+        awsp activate my-profile
+
+    Requires shell integration. Add to your ~/.zshrc:
+        eval "$(awsp init)"
+    """
+    profiles_dict = get_manager().list_profiles()
+    profile_names = list(profiles_dict.keys())
+
+    if not profile_names:
+        if shell_mode:
+            print('echo "No AWS profiles found."')
+            raise typer.Exit(1)
+        print_error("No AWS profiles found.")
+        raise typer.Exit(1)
+
+    current = get_manager().get_current_profile()
+
+    # If no profile specified, show interactive picker
+    if profile is None:
+        selected = select_profile(profile_names, current)
+        if selected is None:
+            if shell_mode:
+                raise typer.Exit(1)
+            raise typer.Exit(1)
+        profile = selected
+
+    # Validate profile exists
+    if profile not in profile_names:
+        if shell_mode:
+            print(f'echo "Profile \'{profile}\' not found."')
+            raise typer.Exit(1)
+        print_error(f"Profile '{profile}' not found.")
+        print_info("Available profiles:")
+        for name in sorted(profile_names):
+            console.print(f"  - {name}")
+        raise typer.Exit(1)
+
+    if shell_mode:
+        # Output export command for shell eval
+        print(get_export_command(profile))
+        print(f'echo "✓ Activated profile: {profile}"')
+    else:
+        # Without shell integration, just print instructions
+        if profile == current:
+            print_info(f"Already on profile: {profile}")
+        else:
+            print_warning("Shell integration required for 'activate' command.")
+            print_info("Add this to your ~/.zshrc:")
+            console.print('  [cyan]eval "$(awsp init)"[/cyan]')
+            console.print()
+            print_info(f"Or manually run:")
+            console.print(f"  [cyan]export AWS_PROFILE={profile}[/cyan]")
+
+
+@app.command()
+def deactivate(
+    shell_mode: bool = typer.Option(
+        False,
+        "--shell-mode",
+        hidden=True,
+        help="Output shell commands for eval",
+    ),
+):
+    """Deactivate current AWS profile (unsets AWS_PROFILE).
+
+    Example:
+        awsp deactivate
+    """
+    from awsp.shell.hooks import get_unset_command
+
+    current = get_manager().get_current_profile()
+
+    if shell_mode:
+        if current:
+            print(get_unset_command())
+            print(f'echo "✓ Deactivated profile: {current}"')
+        else:
+            print('echo "No profile currently active."')
+    else:
+        if current:
+            print_warning("Shell integration required for 'deactivate' command.")
+            print_info("Add this to your ~/.zshrc:")
+            console.print('  [cyan]eval "$(awsp init)"[/cyan]')
+            console.print()
+            print_info(f"Or manually run:")
+            console.print("  [cyan]unset AWS_PROFILE[/cyan]")
+        else:
+            print_info("No profile currently active.")
+
+
+@app.command()
+def setup():
+    """Set up shell integration automatically.
+
+    Detects your shell and adds the integration to your shell config file.
+
+    Example:
+        awsp setup
+    """
+    import os
+    from pathlib import Path
+
+    shell_type = detect_shell()
+
+    if shell_type is None:
+        print_error("Could not detect your shell type.")
+        print_info("Manually add to your shell config:")
+        console.print('  [cyan]eval "$(awsp init)"[/cyan]')
+        raise typer.Exit(1)
+
+    # Determine config file based on shell
+    home = Path.home()
+    if shell_type == ShellType.ZSH:
+        config_file = home / ".zshrc"
+        integration_line = 'eval "$(awsp init)"'
+    elif shell_type == ShellType.BASH:
+        config_file = home / ".bashrc"
+        integration_line = 'eval "$(awsp init)"'
+    elif shell_type == ShellType.FISH:
+        config_file = home / ".config" / "fish" / "config.fish"
+        integration_line = "awsp init --shell fish | source"
+    else:
+        print_error(f"Unsupported shell: {shell_type}")
+        raise typer.Exit(1)
+
+    # Check if already configured
+    if config_file.exists():
+        content = config_file.read_text()
+        if "awsp init" in content:
+            print_success("Shell integration is already configured!")
+            print_info(f"Config file: {config_file}")
+            console.print()
+            print_info("If it's not working, try reloading your shell:")
+            console.print(f"  [cyan]source {config_file}[/cyan]")
+            return
+
+    # Add integration
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(config_file, "a") as f:
+        f.write(f"\n# AWSP: AWS Profile Switcher\n")
+        f.write(f"# Added by 'awsp setup' - enables activate/deactivate commands\n")
+        f.write(f"{integration_line}\n")
+
+    print_success(f"Shell integration added to {config_file}")
+    console.print()
+    print_info("To activate, run:")
+    console.print(f"  [cyan]source {config_file}[/cyan]")
+    console.print()
+    print_info("Or restart your terminal.")
+
+
 if __name__ == "__main__":
     app()

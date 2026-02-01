@@ -48,7 +48,7 @@ awsp() {
     local cmd="${1:-}"
 
     # Commands that need shell integration (modify environment)
-    if [[ -z "$cmd" ]] || [[ "$cmd" == "switch" ]]; then
+    if [[ -z "$cmd" ]] || [[ "$cmd" == "switch" ]] || [[ "$cmd" == "activate" ]] || [[ "$cmd" == "deactivate" ]]; then
         local output
         local exit_code
 
@@ -57,7 +57,7 @@ awsp() {
         exit_code=$?
 
         if [[ $exit_code -eq 0 ]]; then
-            # Output contains export command - eval it
+            # Output contains export/unset command - eval it
             eval "$output"
         else
             # Error occurred - just print the output
@@ -91,7 +91,7 @@ function awsp
     set -l cmd $argv[1]
 
     # Commands that need shell integration
-    if test -z "$cmd"; or test "$cmd" = "switch"
+    if test -z "$cmd"; or test "$cmd" = "switch"; or test "$cmd" = "activate"; or test "$cmd" = "deactivate"
         set -l output (command awsp $argv --shell-mode 2>&1)
         set -l exit_code $status
 
@@ -102,10 +102,8 @@ function awsp
                 if string match -qr '^export AWS_PROFILE=' -- $line
                     set -l profile (string replace 'export AWS_PROFILE="' '' $line | string replace '"' '')
                     set -gx AWS_PROFILE $profile
-                    echo "Switched to profile: $profile"
                 else if string match -qr '^unset AWS_PROFILE' -- $line
                     set -e AWS_PROFILE
-                    echo "AWS_PROFILE unset"
                 else
                     echo $line
                 end

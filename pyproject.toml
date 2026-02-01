@@ -1,11 +1,27 @@
 [project]
 name = "awsp"
-version = "0.1.0"
+version = "0.3.0"
 description = "AWS Profile Switcher - Manage AWS CLI profiles easily"
+readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Punit"}
+]
+keywords = ["aws", "cli", "profile", "switcher", "sso", "iam"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
 ]
 dependencies = [
     "typer[all]>=0.9.0",

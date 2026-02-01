@@ -1,0 +1,97 @@
+# AWSP - AWS Profile Switcher
+
+A command-line utility for easily managing and switching between AWS CLI profiles.
+
+## Features
+
+- **List profiles** - View all configured AWS profiles (IAM and SSO)
+- **Switch profiles** - Interactive profile selection with fuzzy search
+- **Add profiles** - Create new IAM or SSO profiles interactively
+- **Remove profiles** - Safely remove profiles with confirmation
+- **Validate credentials** - Test AWS credentials using STS
+- **Shell integration** - Seamless profile switching in bash, zsh, and fish
+
+## Installation
+
+**Recommended** (using pipx):
+```bash
+pipx install awsp
+```
+
+Or with pip:
+```bash
+pip install awsp
+```
+
+> **Note:** [pipx](https://pipx.pypa.io/) is recommended for CLI tools as it installs them in isolated environments.
+
+## Quick Start
+
+```bash
+# One-time setup (auto-configures shell integration)
+awsp setup
+source ~/.zshrc
+
+# Add a new profile
+awsp add
+
+# Activate a profile (sets AWS_PROFILE)
+awsp activate my-profile
+
+# Deactivate current profile (unsets AWS_PROFILE)
+awsp deactivate
+
+# List all profiles
+awsp list
+
+# Show current profile
+awsp current
+
+# Validate credentials
+awsp validate
+```
+
+## Shell Integration
+
+Add to your shell configuration for automatic profile switching:
+
+**Bash** (`~/.bashrc`):
+```bash
+eval "$(awsp init)"
+```
+
+**Zsh** (`~/.zshrc`):
+```bash
+eval "$(awsp init)"
+```
+
+**Fish** (`~/.config/fish/config.fish`):
+```fish
+awsp init --shell fish | source
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `awsp setup` | Auto-configure shell integration (run once) |
+| `awsp activate [NAME]` | Activate a profile (sets AWS_PROFILE) |
+| `awsp deactivate` | Deactivate current profile (unsets AWS_PROFILE) |
+| `awsp list` | List all AWS profiles |
+| `awsp add` | Add a new profile (IAM or SSO) |
+| `awsp remove NAME` | Remove a profile |
+| `awsp current` | Show current active profile |
+| `awsp validate [NAME]` | Validate profile credentials |
+| `awsp info [NAME]` | Show detailed profile info |
+| `awsp init` | Output shell integration hook |
+| `awsp` | Interactive profile switcher |
+| `awsp switch [NAME]` | Alias for activate |
+
+## Requirements
+
+- Python 3.10+
+- AWS CLI (for credential validation and SSO login)
+
+## License
+
+MIT

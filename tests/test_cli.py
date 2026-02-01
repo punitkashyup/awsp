@@ -315,3 +315,200 @@ class TestCLIAdd:
         result = runner.invoke(app, ["add", "--type", "invalid"])
         assert result.exit_code == 1
         assert "Invalid profile type" in result.stdout
+
+    def test_add_iam_profile_with_mocked_prompts(self, mock_aws_env: Path):
+        """Test adding IAM profile with mocked prompts."""
+        from awsp.config.models import IAMProfile
+
+        mock_profile = IAMProfile(
+            name="mocked-profile",
+            aws_access_key_id="AKIAMOCKEDEXAMPLE12",
+            aws_secret_access_key="mockedSecretKey123456789012",
+            region="us-west-2",
+        )
+
+        with patch("awsp.cli.prompt_iam_profile", return_value=mock_profile):
+            result = runner.invoke(app, ["add", "--type", "iam"])
+            assert result.exit_code == 0
+            assert "created successfully" in result.stdout
+
+    def test_add_iam_profile_cancelled(self, mock_aws_env: Path):
+        """Test cancelling IAM profile creation."""
+        with patch("awsp.cli.prompt_iam_profile", return_value=None):
+            result = runner.invoke(app, ["add", "--type", "iam"])
+            assert result.exit_code == 1
+            assert "Cancelled" in result.stdout
+
+    def test_add_sso_profile_with_mocked_prompts(self, mock_aws_env: Path):
+        """Test adding SSO profile with mocked prompts."""
+        from awsp.config.models import SSOProfile
+
+        mock_profile = SSOProfile(
+            name="mocked-sso",
+            sso_start_url="https://example.awsapps.com/start",
+            sso_region="us-east-1",
+            sso_account_id="123456789012",
+            sso_role_name="Admin",
+        )
+
+        with patch("awsp.cli.prompt_sso_profile", return_value=mock_profile):
+            with patch("awsp.cli.confirm_action", return_value=False):  # Don't run sso login
+                result = runner.invoke(app, ["add", "--type", "sso"])
+                assert result.exit_code == 0
+                assert "created successfully" in result.stdout
+
+    def test_add_sso_profile_cancelled(self, mock_aws_env: Path):
+        """Test cancelling SSO profile creation."""
+        with patch("awsp.cli.prompt_sso_profile", return_value=None):
+            result = runner.invoke(app, ["add", "--type", "sso"])
+            assert result.exit_code == 1
+            assert "Cancelled" in result.stdout
+
+    def test_add_profile_exists_overwrite(self, populated_aws_env: Path):
+        """Test overwriting existing profile."""
+        from awsp.config.models import IAMProfile
+
+        mock_profile = IAMProfile(
+            name="default",  # Existing profile
+            aws_access_key_id="AKIAUPDATEDEXAMPLE1",
+            aws_secret_access_key="updatedSecretKey12345678901",
+        )
+
+        with patch("awsp.cli.prompt_iam_profile", return_value=mock_profile):
+            with patch("awsp.cli.confirm_action", return_value=True):  # Confirm overwrite
+                result = runner.invoke(app, ["add", "--type", "iam"])
+                assert result.exit_code == 0
+                assert "created successfully" in result.stdout
+
+    def test_add_profile_exists_no_overwrite(self, populated_aws_env: Path):
+        """Test declining to overwrite existing profile."""
+        from awsp.config.models import IAMProfile
+
+        mock_profile = IAMProfile(
+            name="default",  # Existing profile
+            aws_access_key_id="AKIAUPDATEDEXAMPLE1",
+            aws_secret_access_key="updatedSecretKey12345678901",
+        )
+
+        with patch("awsp.cli.prompt_iam_profile", return_value=mock_profile):
+            with patch("awsp.cli.confirm_action", return_value=False):  # Decline overwrite
+                result = runner.invoke(app, ["add", "--type", "iam"])
+                assert result.exit_code == 1
+                assert "Cancelled" in result.stdout
+
+    def test_add_interactive_type_selection(self, mock_aws_env: Path):
+        """Test interactive type selection when no --type specified."""
+        from awsp.config.models import ProfileType, IAMProfile
+
+        mock_profile = IAMProfile(
+            name="interactive-test",
+            aws_access_key_id="AKIAINTERACTIVE1234",
+            aws_secret_access_key="interactiveSecretKey1234567",
+        )
+
+        with patch("awsp.cli.select_profile_type", return_value=ProfileType.IAM):
+            with patch("awsp.cli.prompt_iam_profile", return_value=mock_profile):
+                result = runner.invoke(app, ["add"])
+                assert result.exit_code == 0
+                assert "created successfully" in result.stdout
+
+    def test_add_interactive_type_cancelled(self, mock_aws_env: Path):
+        """Test cancelling interactive type selection."""
+        with patch("awsp.cli.select_profile_type", return_value=None):
+            result = runner.invoke(app, ["add"])
+            assert result.exit_code == 1
+
+
+class TestCLIMainCallback:
+    """Tests for the main callback (default command)."""
+
+    def test_main_no_profiles(self, mock_aws_env: Path):
+        """Test main callback with no profiles."""
+        result = runner.invoke(app, [])
+        assert result.exit_code == 0
+        assert "No profile" in result.stdout or "No profiles" in result.stdout
+
+    def test_main_with_profiles_interactive(self, populated_aws_env: Path):
+        """Test main callback with profiles shows current and prompts."""
+        with patch("awsp.cli.select_profile", return_value="production"):
+            result = runner.invoke(app, [])
+            assert result.exit_code == 0
+
+    def test_main_with_profiles_same_selected(
+        self,
+        populated_aws_env: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Test main callback when selecting current profile."""
+        monkeypatch.setenv("AWS_PROFILE", "default")
+
+        with patch("awsp.cli.select_profile", return_value="default"):
+            result = runner.invoke(app, [])
+            assert result.exit_code == 0
+            assert "Already on profile" in result.stdout
+
+    def test_main_shell_mode_success(self, populated_aws_env: Path):
+        """Test main callback with shell mode."""
+        with patch("awsp.cli.select_profile", return_value="production"):
+            result = runner.invoke(app, ["--shell-mode"])
+            assert result.exit_code == 0
+            assert 'export AWS_PROFILE="production"' in result.stdout
+
+    def test_main_shell_mode_cancelled(self, populated_aws_env: Path):
+        """Test main callback shell mode cancelled."""
+        with patch("awsp.cli.select_profile", return_value=None):
+            result = runner.invoke(app, ["--shell-mode"])
+            assert result.exit_code == 1
+
+    def test_main_shell_mode_no_profiles(self, mock_aws_env: Path):
+        """Test main callback shell mode with no profiles."""
+        result = runner.invoke(app, ["--shell-mode"])
+        assert result.exit_code == 1
+
+
+class TestCLISwitchInteractive:
+    """Tests for switch command interactive mode."""
+
+    def test_switch_interactive_cancelled(self, populated_aws_env: Path):
+        """Test switch interactive mode cancelled."""
+        with patch("awsp.cli.select_profile", return_value=None):
+            result = runner.invoke(app, ["switch"])
+            assert result.exit_code == 1
+
+    def test_switch_already_on_profile(
+        self,
+        populated_aws_env: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Test switch to profile already active."""
+        monkeypatch.setenv("AWS_PROFILE", "production")
+
+        result = runner.invoke(app, ["switch", "production"])
+        assert result.exit_code == 0
+        assert "Already on profile" in result.stdout
+
+
+class TestCLIValidateEdgeCases:
+    """Edge case tests for validate command."""
+
+    def test_validate_no_current_profile(self, mock_aws_env: Path):
+        """Test validate with no profile specified and no current profile."""
+        result = runner.invoke(app, ["validate"])
+        assert result.exit_code == 1
+        assert "No profile specified" in result.stdout
+
+    def test_validate_profile_not_found(self, populated_aws_env: Path):
+        """Test validate with nonexistent profile."""
+        result = runner.invoke(app, ["validate", "nonexistent"])
+        assert result.exit_code == 1
+        assert "not found" in result.stdout
+
+
+class TestCLIInfoEdgeCases:
+    """Edge case tests for info command."""
+
+    def test_info_no_current_profile(self, mock_aws_env: Path):
+        """Test info with no profile specified and no current profile."""
+        result = runner.invoke(app, ["info"])
+        assert result.exit_code == 1
+        assert "No profile specified" in result.stdout
